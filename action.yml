@@ -1,0 +1,146 @@
+name: 'Setup HmOS Pipeline'
+description: 'Set up a HarmonyOS pipeline.'
+author: 'clk'
+inputs:
+  version:
+    description: 'The target version of the Command Line Tools, e.g. "6.1.1.300", or the "latest" alias to use the newest available stable release.'
+    required: false
+    default: 'latest'
+  java-distribution:
+    description: 'See https://github.com/actions/setup-java/tree/main#supported-distributions.'
+    required: false
+    default: 'oracle'
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve version
+      id: resolve-version
+      shell: bash
+      run: |
+        if [[ "${{ inputs.version }}" == "latest" ]]; then
+          actual_version=$(gh release view --repo chen-linkai/hmos-cli --json tagName -q .tagName)
+          actual_version="${actual_version#v}"
+        else
+          actual_version="${{ inputs.version }}"
+        fi
+        echo "version=$actual_version" >> $GITHUB_OUTPUT
+        baseline="26.0.0.621"
+        version_ge() {
+          local v1="$1" v2="$2"
+          IFS='.' read -ra a1 <<< "$v1"
+          IFS='.' read -ra a2 <<< "$v2"
+          local len=${#a1[@]}
+          if [ ${#a2[@]} -gt $len ]; then len=${#a2[@]}; fi
+          for ((i=0; i<len; i++)); do
+            local n1=${a1[i]:-0}
+            local n2=${a2[i]:-0}
+            if [ $((10#$n1)) -ne $((10#$n2)) ]; then
+              [ $((10#$n1)) -gt $((10#$n2)) ] && return 0
+              return 1
+            fi
+          done
+          return 0
+        }
+        if version_ge "$actual_version" "$baseline"; then
+          echo "java-version=21" >> $GITHUB_OUTPUT
+        else
+          echo "java-version=17" >> $GITHUB_OUTPUT
+        fi
+    - name: Configure the JDK
+      uses: actions/setup-java@v6
+      with:
+        distribution: ${{ inputs.java-distribution }}
+        java-version: ${{ steps.resolve-version.outputs.java-version }}
+    - name: Restore cache
+      id: cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/hmos-cli-cache
+        key: hmos-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve-version.outputs.version }}
+        restore-keys: |
+          hmos-cli-
+    - name: Download CLI
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ steps.resolve-version.outputs.version }}
+      run: |
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          OS="mac"
+        else
+          OS=$(echo '${{ runner.os }}' | tr '[:upper:]' '[:lower:]')
+        fi
+        ARCH=$(echo '${{ runner.arch }}' | tr '[:upper:]' '[:lower:]')
+        mkdir -p "$RUNNER_TEMP/hmos-cli-cache"
+        cd "$RUNNER_TEMP/hmos-cli-cache"
+        gh release download --repo "chen-linkai/hmos-cli" \
+          --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip" \
+          --dir . \
+          --clobber
+        if ! ls commandline-tools-*.zip &>/dev/null; then
+          exit 1
+        fi
+    - name: Obtain Command Line Tools
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/hmos-cli"
+        cd "$RUNNER_TEMP/hmos-cli-cache"
+        zip_file=$(ls commandline-tools-*.zip | head -n1)
+        if [ -z "$zip_file" ]; then
+          exit 1
+        fi
+        unzip -q -o "$zip_file" -d "$RUNNER_TEMP/hmos-cli"
+        echo "COMMANDLINE_TOOL_DIR=${COMMANDLINE_TOOL_DIR}" >> $GITHUB_ENV
+    - name: Set the Node.js Environment Variables
+      shell: bash
+      run: |
+        NODE_HOME="$COMMANDLINE_TOOL_DIR/command-line-tools/tool/node"
+        echo "NODE_HOME=$NODE_HOME" >> $GITHUB_ENV
+        echo "$NODE_HOME/bin" >> $GITHUB_PATH
+    - name: Set the hdc Environment Variable
+      shell: bash
+      run: |
+        HDC_HOME="$COMMANDLINE_TOOL_DIR/command-line-tools/sdk/default/openharmony/toolchains"
+        echo "HDC_HOME=$HDC_HOME" >> $GITHUB_ENV
+        echo "$HDC_HOME" >> $GITHUB_PATH
+    - name: Set the hvigor Environment Variable
+      shell: bash
+      run: |
+        echo "$COMMANDLINE_TOOL_DIR/command-line-tools/bin" >> $GITHUB_PATH
+    - name: Configure the npm Image Repository
+      shell: bash
+      run: |
+        npm config set registry https://repo.huaweicloud.com/repository/npm/
+        npm config set "@ohos:registry" https://repo.harmonyos.com/npm/
+    - name: Install ohpm
+      shell: bash
+      run: |
+        ohpm config set registry https://ohpm.openharmony.cn/ohpm/
+        ohpm config set strict_ssl false
+    - name: Install the libGL1 Library
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ -f /etc/os-release ]; then
+          . /etc/os-release
+          
+          if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]] || \
+             [[ "$ID_LIKE" == *"ubuntu"* || "$ID_LIKE" == *"debian"* ]]; then
+              echo "Detected Debian/Ubuntu, installing libgl1-mesa-dev"
+              sudo apt-get update
+              sudo apt-get install -y libgl1-mesa-dev
+          
+          elif [[ "$ID" == "centos" || "$ID" == "rhel" || "$ID" == "fedora" ]] || \
+               [[ "$ID_LIKE" == *"rhel"* || "$ID_LIKE" == *"fedora"* ]]; then
+              echo "Detected RHEL/CentOS/Fedora, installing mesa-libGL-devel"
+              if command -v dnf &>/dev/null; then
+                  sudo dnf install -y mesa-libGL-devel
+              else
+                  sudo yum install -y mesa-libGL-devel
+              fi
+          
+          else
+              echo "Unsupported Linux distribution: $ID"
+              exit 1
+          fi
+        fi
