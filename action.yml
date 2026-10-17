@@ -90,6 +90,7 @@ runs:
           exit 1
         fi
         unzip -q -o "$zip_file" -d "$RUNNER_TEMP/hmos-cli"
+        export COMMANDLINE_TOOL_DIR="$RUNNER_TEMP/hmos-cli"
         echo "COMMANDLINE_TOOL_DIR=${COMMANDLINE_TOOL_DIR}" >> $GITHUB_ENV
     - name: Set the Node.js Environment Variables
       shell: bash
