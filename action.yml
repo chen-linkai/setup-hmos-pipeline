@@ -98,15 +98,12 @@ runs:
         archives=(commandline-tools-*.zip)
         if [ ${#archives[@]} -gt 0 ]; then
           zip_file="${archives[0]}"
-          echo "Using single archive: $zip_file"
         else
           parts=(commandline-tools-*.zip.[0-9][0-9][0-9])
           if [ ${#parts[@]} -eq 0 ]; then
-            echo "No archive or split parts found in $cache_dir" >&2
             exit 1
           fi
           IFS=$'\n' sorted_parts=($(printf '%s\n' "${parts[@]}" | LC_ALL=C sort))
-          echo "Merging ${#sorted_parts[@]} split parts..."
           zip_file="$dest_dir/commandline-tools-merged.zip"
           cat "${sorted_parts[@]}" > "$zip_file"
           is_merged=true
