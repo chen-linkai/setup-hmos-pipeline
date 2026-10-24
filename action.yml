@@ -99,7 +99,7 @@ runs:
         if [ ${#archives[@]} -gt 0 ]; then
           zip_file="${archives[0]}"
         else
-          parts=(commandline-tools-*.zip.[0-9][0-9][0-9])
+          parts=(commandline-tools-*.zip.[0-9]*)
           if [ ${#parts[@]} -eq 0 ]; then
             exit 1
           fi
