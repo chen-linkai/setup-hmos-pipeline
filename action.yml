@@ -75,12 +75,12 @@ runs:
         cd "$RUNNER_TEMP/hmos-cli-cache"
         gh release download --repo "chen-linkai/hmos-cli" \
           --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip" \
-          --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip.[0-9][0-9][0-9]" \
+          --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip.[0-9]*" \
           --dir . \
           --clobber
         shopt -s nullglob
         archives=(commandline-tools-*.zip)
-        parts=(commandline-tools-*.zip.[0-9][0-9][0-9])
+        parts=(commandline-tools-*.zip.[0-9]*)
         if [ ${#archives[@]} -eq 0 ] && [ ${#parts[@]} -eq 0 ]; then
           exit 1
         fi
