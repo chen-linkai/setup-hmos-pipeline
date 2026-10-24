@@ -75,22 +75,49 @@ runs:
         cd "$RUNNER_TEMP/hmos-cli-cache"
         gh release download --repo "chen-linkai/hmos-cli" \
           --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip" \
+          --pattern "commandline-tools-$OS-$ARCH-$VERSION.zip.[0-9][0-9][0-9]" \
           --dir . \
           --clobber
-        if ! ls commandline-tools-*.zip &>/dev/null; then
+        shopt -s nullglob
+        archives=(commandline-tools-*.zip)
+        parts=(commandline-tools-*.zip.[0-9][0-9][0-9])
+        if [ ${#archives[@]} -eq 0 ] && [ ${#parts[@]} -eq 0 ]; then
           exit 1
         fi
     - name: Obtain Command Line Tools
       shell: bash
       run: |
-        mkdir -p "$RUNNER_TEMP/hmos-cli"
-        cd "$RUNNER_TEMP/hmos-cli-cache"
-        zip_file=$(ls commandline-tools-*.zip | head -n1)
-        if [ -z "$zip_file" ]; then
-          exit 1
+        shopt -s nullglob
+        cache_dir="$RUNNER_TEMP/hmos-cli-cache"
+        dest_dir="$RUNNER_TEMP/hmos-cli"
+        mkdir -p "$dest_dir"
+        cd "$cache_dir"
+
+        zip_file=""
+        is_merged=false
+        archives=(commandline-tools-*.zip)
+        if [ ${#archives[@]} -gt 0 ]; then
+          zip_file="${archives[0]}"
+          echo "Using single archive: $zip_file"
+        else
+          parts=(commandline-tools-*.zip.[0-9][0-9][0-9])
+          if [ ${#parts[@]} -eq 0 ]; then
+            echo "No archive or split parts found in $cache_dir" >&2
+            exit 1
+          fi
+          IFS=$'\n' sorted_parts=($(printf '%s\n' "${parts[@]}" | LC_ALL=C sort))
+          echo "Merging ${#sorted_parts[@]} split parts..."
+          zip_file="$dest_dir/commandline-tools-merged.zip"
+          cat "${sorted_parts[@]}" > "$zip_file"
+          is_merged=true
         fi
-        unzip -q -o "$zip_file" -d "$RUNNER_TEMP/hmos-cli"
-        export COMMANDLINE_TOOL_DIR="$RUNNER_TEMP/hmos-cli"
+
+        unzip -q -o "$zip_file" -d "$dest_dir"
+        if [ "$is_merged" = true ]; then
+          rm -f "$zip_file"
+        fi
+
+        export COMMANDLINE_TOOL_DIR="$dest_dir"
         echo "COMMANDLINE_TOOL_DIR=${COMMANDLINE_TOOL_DIR}" >> $GITHUB_ENV
     - name: Set the Node.js Environment Variables
       shell: bash
