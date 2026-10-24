@@ -19,10 +19,10 @@ runs:
       run: |
         if [[ "${{ inputs.version }}" == "latest" ]]; then
           actual_version=$(gh release view --repo chen-linkai/hmos-cli --json tagName -q .tagName)
-          actual_version="${actual_version#v}"
         else
           actual_version="${{ inputs.version }}"
         fi
+        actual_version="${actual_version#v}"
         echo "version=$actual_version" >> $GITHUB_OUTPUT
         baseline="26.0.0.621"
         version_ge() {
