@@ -58,13 +58,14 @@ runs:
         path: ${{ runner.temp }}/hmos-cli-cache
         key: hmos-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve-version.outputs.version }}
         restore-keys: |
-          hmos-cli-
+          hmos-cli-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve-version.outputs.version }}
     - name: Download CLI
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         VERSION: ${{ steps.resolve-version.outputs.version }}
       run: |
+        rm -rf "$RUNNER_TEMP/hmos-cli-cache"/*
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           OS="mac"
         else
